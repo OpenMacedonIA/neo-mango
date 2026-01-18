@@ -1,4 +1,17 @@
+# Specific
 MANGOT5/
-__pycache__/
 *.pt
 *.bin
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
