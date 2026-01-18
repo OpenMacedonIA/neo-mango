@@ -36,7 +36,7 @@ class MangoManager:
     Gestor para el modelo MANGO T5 (Sysadmin AI).
     Traduce lenguaje natural a comandos Bash.
     """
-    def __init__(self, model_path="MANGOT5"):
+    def __init__(self, model_path="models/MANGOt5"):
         self.model_path = model_path
         self.tokenizer = None
         self.model = None
