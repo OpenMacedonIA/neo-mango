@@ -57,7 +57,8 @@ class MangoManager:
     def load_model(self):
         """Carga el modelo y el tokenizer."""
         if not os.path.exists(self.model_path):
-            logger.error(f"Directorio del modelo no encontrado: {self.model_path}")
+            logger.info(f"Directorio del modelo no encontrado: {self.model_path} (MANGO desactivado).")
+            self.is_ready = False
             return
 
         try:
