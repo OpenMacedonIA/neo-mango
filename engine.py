@@ -3,21 +3,21 @@ import os
 import sys
 from unittest.mock import MagicMock
 
-# --- Hack: Mock broken torchvision to prevent T5 load crash ---
-# The user's environment has a broken torchvision install (RuntimeError: operator torchvision::nms does not exist)
-# T5 is text-only, so we don't need vision.
+# --- Hack: Simular torchvision roto para prevenir cuelgue de T5 al cargar ---
+# El entorno del usuario tiene una instalación rota de torchvision (RuntimeError: operator torchvision::nms does not exist)
+# T5 es solo texto, así que no necesitamos visión.
 try:
     import torchvision
 except (ImportError, RuntimeError):
     mock_tv = MagicMock()
-    mock_tv.__spec__ = None # Imitate a module that has been loaded? Or use explicit spec? 
-    # If find_spec is called, it returns None if not found.
-    # But user code might check __spec__.
-    # Actually, simpler: unregister it from sys.modules so importlib searches? No, we want to BLOCK valid search.
-    # Let's try to just set None and see if importlib treats it as 'not found' or 'built-in'.
+    mock_tv.__spec__ = None # ¿Imitar un módulo que ha sido cargado? ¿O usar especificación explícita? 
+    # Si se llama a find_spec, devuelve None si no se encuentra.
+    # Pero el código del usuario podría comprobar __spec__.
+    # En realidad, más simple: ¿anular registro de sys.modules para que importlib busque? No, queremos BLOQUEAR búsqueda válida.
+    # Intentemos simplemente poner None y ver si importlib lo trata como 'no encontrado' o 'incorporado'.
     
-    # Better: Patch find_spec? No. 
-    # Let's try to set __spec__ to a dummy.
+    # Mejor: ¿Parchear find_spec? No. 
+    # Intentemos ajustar __spec__ a uno ficticio.
     from importlib.machinery import ModuleSpec
     mock_tv.__spec__ = ModuleSpec(name="torchvision", loader=None)
     
@@ -28,7 +28,7 @@ except (ImportError, RuntimeError):
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-# Setup Logging
+# Configurar registro
 logger = logging.getLogger("MangoManager")
 
 class MangoManager:
@@ -40,17 +40,17 @@ class MangoManager:
         if model_path:
              self.model_path = model_path
         else:
-             # Auto-detect priority: Lime > MANGOt5
+             # Auto-detectar prioridad: Lime > MANGOt5
              if os.path.exists("models/Lime"):
                  self.model_path = "models/Lime"
              elif os.path.exists("models/MANGOt5"):
                  self.model_path = "models/MANGOt5"
              else:
-                 self.model_path = "models/MANGOt5" # Default fallback
+                 self.model_path = "models/MANGOt5" # Respaldo por defecto
         self.tokenizer = None
         self.model = None
         self.is_ready = False
-        self.device = "cpu" # Default to CPU for stability on i3/8GB, can change to cuda if available
+        self.device = "cpu" # CPU por defecto para estabilidad en i3/8GB, puede cambiar a cuda si está disponible
 
         self.load_model()
 
@@ -64,13 +64,13 @@ class MangoManager:
         try:
             logger.info(f"Cargando MANGO T5 desde {self.model_path}...")
             
-            # Detect device
+            # Detectar dispositivo
             if torch.cuda.is_available():
                 self.device = "cuda"
             else:
                 self.device = "cpu"
-                # OPTIMIZATION: Limit PyTorch threads to 1 or 2 on dual-core CPUs (i3)
-                # to prevent starving the audio/voice threads.
+                # OPTIMIZACIÓN: Limitar hilos de PyTorch a 1 o 2 en CPUs dual-core (i3)
+                # para evitar inanición de los hilos de audio/voz.
                 torch.set_num_threads(1)
                 torch.set_num_interop_threads(1)
                 
@@ -82,7 +82,7 @@ class MangoManager:
             self.is_ready = True
             logger.info("MANGO T5 cargado correctamente.")
             
-            # Memory Cleanup
+            # Limpieza de memoria
             import gc
             gc.collect()
 
@@ -99,13 +99,13 @@ class MangoManager:
             return None, 0
 
         try:
-            # Preprocessing simple
+            # Preprocesamiento simple
             input_text = text.strip()
             
-            # Tokenize
+            # Tokenizar
             input_ids = self.tokenizer.encode(input_text, return_tensors="pt").to(self.device)
             
-            # Generate
+            # Generar
             outputs = self.model.generate(
                 input_ids, 
                 max_length=128, 
@@ -115,28 +115,28 @@ class MangoManager:
                 output_scores=True
             )
             
-            # Decode
+            # Decodificar
             command = self.tokenizer.decode(outputs.sequences[0], skip_special_tokens=True)
             
-            # Calcular confianza aproximada (simple heuristic based on sequence score)
-            # T5 gen logs scores, but for now we trust the top beam.
-            # Convert log_score to prob roughly: exp(score / length)
+            # Calcular confianza aproximada (heurística simple basada en puntuación de secuencia)
+            # Las puntuaciones de logs de gen. de T5, pero por ahora confiamos en el primer beam.
+            # Convertir log_score a prob aproximadamente: exp(score / length)
             sequence_score = outputs.sequences_scores[0].item()
             length = len(outputs.sequences[0])
             confidence = 0.0
             
-            # --- Filtering ---
-            # Penalize known chat phrases or very short non-commands
+            # --- Filtrado ---
+            # Penalizar frases de chat conocidas o no-comandos muy cortos
             ignored_phrases = ["hola", "gracias", "entendido", "me he entendido", "buenos dias", "adios", "que tal"]
             if input_text.lower() in ignored_phrases or len(input_text.split()) < 2:
-                 # Unless it's a known single-word command like "reboot" (which usually needs auth anyway), ignore it
-                 # For safety, we drop confidence for these generic inputs
+                 # A menos que sea un comando conocido de una sola palabra como "reboot" (que de todos modos necesita auth), ignorarlo
+                 # Por seguridad, reducimos la confianza para estas entradas genéricas
                  confidence = 0.0
                  logger.info(f"Input '{input_text}' filtered as likely chat/noise.")
                  return None, 0.0
 
-            # Normalizing somewhat arbitrarily for T5 since scores are negative log probs
-            # T5 scores are usually around -1.0 to -8.0
+            # Normalizando algo arbitrariamente para T5 dado que los puntajes son probs logarítmicas negativas
+            # Puntuaciones de T5 son habitualmente en torno de -1.0 a -8.0
             if sequence_score > -1.5: confidence = 0.98
             elif sequence_score > -3.0: confidence = 0.9
             elif sequence_score > -5.0: confidence = 0.75
